@@ -70,3 +70,32 @@ def get_user(current_user):
   user_data["updated_at"] = user.updated_at
   
   return jsonify({ "user": user_data }), 200
+
+@app.route("/user/me", methods=["PUT"])
+@token_required
+def update_user(current_user):
+  user = User.query.filter_by(id = current_user.id).first()
+
+  if not user:
+    return jsonify({"message": "User not found"}), 404
+  
+  data = request.get_json()
+
+  user.name = data["name"]
+  user.age = data["age"]
+  user.email = data["email"]
+
+  db.session.commit()
+
+  user = User.query.get(user.id)
+
+  user_data = {}
+
+  user_data["id"] = user.id
+  user_data["name"] = user.name
+  user_data["age"] = user.age
+  user_data["email"] = user.email
+  user_data["created_at"] = user.created_at
+  user_data["updated_at"] = user.updated_at
+  
+  return jsonify(user_data), 200
