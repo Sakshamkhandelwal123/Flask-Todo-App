@@ -99,3 +99,16 @@ def update_user(current_user):
   user_data["updated_at"] = user.updated_at
   
   return jsonify(user_data), 200
+
+@app.route("/user/me", methods=["DELETE"])
+@token_required
+def delete_user(current_user):
+  user = User.query.filter_by(id = current_user.id).first()
+
+  if not user:
+    return jsonify({"message": "User not found"}), 404
+  
+  db.session.delete(user)
+  db.session.commit()
+
+  return jsonify({"message": "User deleted successfully"}), 200
