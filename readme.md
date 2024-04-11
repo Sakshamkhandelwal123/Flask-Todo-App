@@ -7,7 +7,7 @@
 4. SQLAlchemy
 5. Alembic
 6. JWT
-7. 
+7. Werkzeug
 
 ### Setup -
 ```
