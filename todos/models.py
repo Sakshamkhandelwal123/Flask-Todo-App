@@ -1,3 +1,4 @@
+from sqlalchemy import inspect
 from datetime import datetime
 
 from .. import db
@@ -12,3 +13,6 @@ class Todo(db.Model):
 
   #Relations
   user = db.relationship("User", back_populates="todos")
+
+  def toDict(self):
+    return {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
