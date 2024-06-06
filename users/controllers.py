@@ -9,106 +9,242 @@ from .models import User
 from .. import db
 from ..app import app
 from ..decorators import token_required
+from ..mail_template import send_email
+from ..helpers import generate_otp
 
 @app.route('/user/signup', methods=['POST'])
 def signup():
-  data = request.get_json()
+  try:
+    data = request.get_json()
 
-  email = data['email']
-  password = data['password']
+    email = data['email']
+    password = data['password']
 
-  user = User.query.filter_by(email=email).first()
+    user = User.query.filter_by(email=email).first()
 
-  if not user:
-    hashed_password = generate_password_hash(password, method="sha256")
+    if not user:
+      hashed_password = generate_password_hash(password, method="sha256")
+      otp = generate_otp()
 
-    user = User(id=str(uuid.uuid4()), email=email, password=hashed_password, name=data['name'], age=data['age'])
-    db.session.add(user)
+      user = User(id=str(uuid.uuid4()), email=email, password=hashed_password, name=data['name'], age=data['age'], otp=otp)
+      db.session.add(user)
+      db.session.commit()
+
+      send_email(email, otp, 'Thanks for signing up!!!')
+
+      return jsonify({"message": "User created successfully"}), 201
+    
+    return jsonify({"message": "User already exists"})
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/user/verify-email', methods=['POST'])
+def verify_email():
+  try:
+    data = request.get_json()
+
+    email = data['email']
+    otp = data['otp']
+
+    user = User.query.filter_by(email = email).first()
+
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    if user.is_email_verified == True:
+      return jsonify({"message": "Email already verified"}), 400
+    
+    if user.otp == otp:
+      user.otp = None
+      user.is_email_verified = True
+      db.session.commit()
+
+      token = jwt.encode({
+        "email": user.email,
+        "exp": datetime.utcnow() + timedelta(minutes=120)
+      }, os.getenv("SECRET_KEY"))
+
+      return jsonify({"token": token.decode("utf-8")}), 200
+    
+    return jsonify({"message": "Invalid OTP"}), 401
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/user/resend-verification-email', methods=['POST'])
+def resend_verification_email():
+  try:
+    data = request.get_json()
+
+    email = data['email']
+
+    user = User.query.filter_by(email = email).first()
+
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    user.otp = generate_otp()
+    user.is_email_verified = False
+
     db.session.commit()
 
-    return jsonify({"message": "User created successfully"}), 201
-  
-  return jsonify({"message": "User already exists"})
+    send_email(email, user.otp, 'Thanks for signing up!!!')
+
+    return jsonify({"message": "Email sent successfully"}), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @app.route("/user/login", methods=["POST"])
 def login():
-  auth = request.get_json()
+  try:
+    auth = request.get_json()
 
-  if not auth or not auth["email"] or not auth["password"]:
-    return jsonify({"message": "Please provide email and password"}), 400
-  
-  user = User.query.filter_by(email = auth["email"]).first()
+    if not auth or not auth["email"] or not auth["password"]:
+      return jsonify({"message": "Please provide email and password"}), 400
+    
+    user = User.query.filter_by(email = auth["email"]).first()
 
-  if not user:
-    return jsonify({"message": "User not found"}), 404
-  
-  if check_password_hash(user.password, auth["password"]):
-    token = jwt.encode({
-      "email": user.email,
-      "exp": datetime.utcnow() + timedelta(minutes=60)
-    }, os.getenv("SECRET_KEY"))
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    if user.is_email_verified == False:
+      return jsonify({"message": "Please verify your email"}), 401
+    
+    if check_password_hash(user.password, auth["password"]):
+      token = jwt.encode({
+        "email": user.email,
+        "exp": datetime.utcnow() + timedelta(minutes=120)
+      }, os.getenv("SECRET_KEY"))
 
-    return jsonify({"token": token.decode("utf-8")}), 200
+      return jsonify({"token": token.decode("utf-8")}), 200
+    
+    return jsonify({"message": "Invalid password"}), 401
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
   
-  return jsonify({"message": "Invalid password"}), 401
+@app.route("/user/forgot-password", methods=["POST"])
+def forgot_password():
+  try:
+    data = request.get_json()
+
+    email = data['email']
+
+    user = User.query.filter_by(email = email).first()
+
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    user.otp = generate_otp()
+
+    db.session.commit()
+
+    send_email(email, user.otp, 'Request For Changing Password!!!')
+
+    return jsonify({"message": "Email sent successfully"}), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
+  
+@app.route("/user/verify-password", methods=["POST"])
+def verify_password():
+  try:
+    data = request.get_json()
+
+    email = data['email']
+    otp = data['otp']
+    new_password = data['newPassword']
+
+    user = User.query.filter_by(email = email).first()
+
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    if user.otp != otp:
+      return jsonify({"message": "Invalid OTP"}), 401
+    
+    hashed_password = generate_password_hash(new_password, method="sha256")
+
+    user.password =  hashed_password
+    user.otp = None
+
+    db.session.commit()
+
+    return jsonify({"message": "Password changed successfully"}), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @app.route("/user/me", methods=["GET"])
 @token_required
 def get_user(current_user):
-  user = User.query.filter_by(id = current_user.id).first()
+  try:
+    user = User.query.filter_by(id = current_user.id).first()
 
-  if not user:
-    return jsonify({"message": "User not found"}), 404
-  
-  user_data = {}
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    user_data = {}
 
-  user_data["id"] = user.id
-  user_data["name"] = user.name
-  user_data["age"] = user.age
-  user_data["email"] = user.email
-  user_data["created_at"] = user.created_at
-  user_data["updated_at"] = user.updated_at
-  
-  return jsonify({ "user": user_data }), 200
+    user_data["id"] = user.id
+    user_data["name"] = user.name
+    user_data["age"] = user.age
+    user_data["email"] = user.email
+    user_data["is_email_verified"] = user.is_email_verified
+    user_data["created_at"] = user.created_at
+    user_data["updated_at"] = user.updated_at
+    
+    return jsonify({ "user": user_data }), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @app.route("/user/me", methods=["PUT"])
 @token_required
 def update_user(current_user):
-  user = User.query.filter_by(id = current_user.id).first()
+  try:
+    user = User.query.filter_by(id = current_user.id).first()
 
-  if not user:
-    return jsonify({"message": "User not found"}), 404
-  
-  data = request.get_json()
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    data = request.get_json()
 
-  user.name = data["name"]
-  user.age = data["age"]
-  user.email = data["email"]
+    if data["email"] != user.email:
+      user.email = data["email"]
+      user.otp = generate_otp()
+      user.is_email_verified = False
 
-  db.session.commit()
+      send_email(user.email, user.otp, 'Request For Changing Email!!!')
 
-  user = User.query.get(user.id)
+    user.name = data["name"]
+    user.age = data["age"]
 
-  user_data = {}
+    db.session.commit()
 
-  user_data["id"] = user.id
-  user_data["name"] = user.name
-  user_data["age"] = user.age
-  user_data["email"] = user.email
-  user_data["created_at"] = user.created_at
-  user_data["updated_at"] = user.updated_at
-  
-  return jsonify(user_data), 200
+    user = User.query.get(user.id)
+
+    user_data = {}
+
+    user_data["id"] = user.id
+    user_data["name"] = user.name
+    user_data["age"] = user.age
+    user_data["email"] = user.email
+    user_data["is_email_verified"] = user.is_email_verified
+    user_data["created_at"] = user.created_at
+    user_data["updated_at"] = user.updated_at
+    
+    return jsonify(user_data), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
 @app.route("/user/me", methods=["DELETE"])
 @token_required
 def delete_user(current_user):
-  user = User.query.filter_by(id = current_user.id).first()
+  try:
+    user = User.query.filter_by(id = current_user.id).first()
 
-  if not user:
-    return jsonify({"message": "User not found"}), 404
-  
-  db.session.delete(user)
-  db.session.commit()
+    if not user:
+      return jsonify({"message": "User not found"}), 404
+    
+    db.session.delete(user)
+    db.session.commit()
 
-  return jsonify({"message": "User deleted successfully"}), 200
+    return jsonify({"message": "User deleted successfully"}), 200
+  except Exception as e:
+    return jsonify({"message": f"An error occurred: {str(e)}"}), 500
