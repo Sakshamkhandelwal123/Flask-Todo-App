@@ -1,5 +1,4 @@
 from flask import request, jsonify
-import logging
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import uuid
@@ -12,14 +11,8 @@ from ..app import app
 from ..decorators import token_required
 from ..mail_template import send_email
 from ..helpers import generate_otp
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class CustomException(Exception):
-    def __init__(self, message, status_code=500):
-        super().__init__(message, status_code)
-        self.status_code = status_code
+from ..exceptions import CustomException
+from ..logger import logger
 
 @app.route('/user/signup', methods=['POST'])
 def signup():

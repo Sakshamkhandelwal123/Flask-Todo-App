@@ -6,6 +6,8 @@ from .. import db
 from .models import Todo
 from ..users.models import User
 from ..decorators import token_required
+from ..exceptions import CustomException
+from ..logger import logger
 
 @app.route('/todo', methods=['GET'])
 @token_required
@@ -14,7 +16,7 @@ def get_all_todos(current_user):
     user = User.query.filter_by(id = current_user.id).first()
 
     if not user:
-      return jsonify({"message": "User not found"}), 404
+      raise CustomException("User not found", 404)
     
     todos = Todo.query.filter_by(user_id = user.id).all()
 
@@ -24,6 +26,9 @@ def get_all_todos(current_user):
       output.append(todo.toDict())
 
     return jsonify({"todos": output})
+  except CustomException as ce:
+    logger.error(ce)
+    return jsonify({"message": ce.args[0]}), ce.status_code
   except Exception as e:
     return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
@@ -34,14 +39,17 @@ def get_todo(current_user, todo_id):
     user = User.query.filter_by(id = current_user.id).first()
 
     if not user:
-      return jsonify({"message": "User not found"}), 404
+      raise CustomException("User not found", 404)
     
     todo = Todo.query.filter_by(id = todo_id, user_id = user.id).first()
 
     if not todo:
-      return jsonify({"message": "Todo not found"}), 404
+      raise CustomException("Todo not found", 404)
     
     return jsonify({"todo": todo.toDict()})
+  except CustomException as ce:
+    logger.error(ce)
+    return jsonify({"message": ce.args[0]}), ce.status_code
   except Exception as e:
     return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
@@ -52,7 +60,7 @@ def create_todo(current_user):
     user = User.query.filter_by(id = current_user.id).first()
 
     if not user:
-      return jsonify({"message": "User not found"}), 404
+      raise CustomException("User not found", 404)
     
     data = request.get_json()
 
@@ -69,6 +77,9 @@ def create_todo(current_user):
     todo = Todo.query.get(new_todo.id).toDict()
 
     return jsonify({"todo": todo})
+  except CustomException as ce:
+    logger.error(ce)
+    return jsonify({"message": ce.args[0]}), ce.status_code
   except Exception as e:
     return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
@@ -79,18 +90,21 @@ def update_todo(current_user, todo_id):
     user = User.query.filter_by(id = current_user.id).first()
 
     if not user:
-      return jsonify({"message": "User not found"}), 404
+      raise CustomException("User not found", 404)
     
     todo = Todo.query.filter_by(id = todo_id, user_id = user.id).first()
 
     if not todo:
-      return jsonify({"message": "Todo not found"}), 404
+      raise CustomException("Todo not found", 404)
     
     todo.complete = True
 
     db.session.commit()
 
     return jsonify({"message": "Todo completed successfully"})
+  except CustomException as ce:
+    logger.error(ce)
+    return jsonify({"message": ce.args[0]}), ce.status_code
   except Exception as e:
     return jsonify({"message": f"An error occurred: {str(e)}"}), 500
 
@@ -101,16 +115,19 @@ def delete_todo(current_user, todo_id):
     user = User.query.filter_by(id = current_user.id).first()
 
     if not user:
-      return jsonify({"message": "User not found"}), 404
+      raise CustomException("User not found", 404)
     
     todo = Todo.query.filter_by(id = todo_id, user_id = user.id).first()
 
     if not todo:
-      return jsonify({"message": "Todo not found"}), 404
+      raise CustomException("Todo not found", 404)
     
     db.session.delete(todo)
     db.session.commit()
 
     return jsonify({"message": "Todo deleted successfully"})
+  except CustomException as ce:
+    logger.error(ce)
+    return jsonify({"message": ce.args[0]}), ce.status_code
   except Exception as e:
     return jsonify({"message": f"An error occurred: {str(e)}"}), 500
