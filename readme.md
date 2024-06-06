@@ -8,6 +8,7 @@
 5. Alembic
 6. JWT
 7. Werkzeug
+8. Sendgrid
 
 ### Setup -
 ```
