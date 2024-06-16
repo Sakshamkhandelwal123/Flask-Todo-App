@@ -76,7 +76,7 @@ def verify_email():
 
       expiration_time = decoded_token.get("exp")
 
-      return jsonify({"token": token, "expires_in": datetime.utcfromtimestamp(expiration_time)}), 200
+      return jsonify({"token": token, "expires_in": expiration_time}), 200
     
     raise CustomException("Invalid OTP", 401)
   except CustomException as ce:
@@ -141,7 +141,7 @@ def login():
 
       expiration_time = decoded_token.get("exp")
 
-      return jsonify({"token": token, "expires_in": datetime.utcfromtimestamp(expiration_time)}), 200
+      return jsonify({"token": token, "expires_in": expiration_time}), 200
     
     raise CustomException("Invalid password", 401)
   except CustomException as ce:
