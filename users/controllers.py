@@ -70,7 +70,13 @@ def verify_email():
         "exp": datetime.utcnow() + timedelta(minutes=120)
       }, os.getenv("SECRET_KEY"))
 
-      return jsonify({"token": token.decode("utf-8")}), 200
+      token = token.decode("utf-8")
+
+      decoded_token = jwt.decode(token, os.getenv("SECRET_KEY"))
+
+      expiration_time = decoded_token.get("exp")
+
+      return jsonify({"token": token, "expires_in": datetime.utcfromtimestamp(expiration_time)}), 200
     
     raise CustomException("Invalid OTP", 401)
   except CustomException as ce:
@@ -129,7 +135,13 @@ def login():
         "exp": datetime.utcnow() + timedelta(minutes=120)
       }, os.getenv("SECRET_KEY"))
 
-      return jsonify({"token": token.decode("utf-8")}), 200
+      token = token.decode("utf-8")
+
+      decoded_token = jwt.decode(token, os.getenv("SECRET_KEY"))
+
+      expiration_time = decoded_token.get("exp")
+
+      return jsonify({"token": token, "expires_in": datetime.utcfromtimestamp(expiration_time)}), 200
     
     raise CustomException("Invalid password", 401)
   except CustomException as ce:
